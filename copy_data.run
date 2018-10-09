@@ -1,0 +1,45 @@
+#!/bin/bash
+. ~/functions_download_dwd.sh
+
+export NCARG_ROOT=/sw/jessie-x64/ncl-6.4.0-nodap-precompiled 
+export PATH=$NCARG_ROOT/bin:$PATH 
+
+export cdo=/sw/jessie-x64/cdo-1.8.0-gccsys/bin/cdo
+export python=/home/mpim/m300382/.conda/envs/my_env/bin/python
+
+export year=`date +"%Y"`
+export month=`date +"%m"`
+export day=`date +"%d"`
+export hour=`date +"%H"`
+export hour_no_zero=`date -u +"%-H"`
+
+if [ "$hour_no_zero" -ge 4 ] && [ "$hour_no_zero" -lt 10 ] 
+then 
+ run="00"
+elif [ "$hour_no_zero" -ge 10 ] && [ "$hour_no_zero" -lt 16 ] 
+then
+ run="06"
+elif [ "$hour_no_zero" -ge 16 ] && [ "$hour_no_zero" -lt 21 ] 
+then
+ run="12"
+elif [ "$hour_no_zero" -ge 21 ] 
+then
+ run="18"
+fi
+
+export run
+
+cd /scratch/local1/m300382/icon_eps
+rm *.grib2
+cp /home/mpim/m300382/icon_eps/*.py ./
+
+#2-D variables
+export TASK_PYTHON_ICON_EPS="download_merge_2d_variable_icon_eps"
+${python} task_parallelism_general.py t_2m tot_prec u_10m v_10m
+
+export QT_QPA_PLATFORM=offscreen
+${python} /home/mpim/m300382/icon_eps/plot_meteogram.py 
+
+ncftpput -R -v altervista icon_eps /scratch/local1/m300382/icon_eps/meteogram_*
+
+cd 
