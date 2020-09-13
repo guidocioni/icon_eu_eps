@@ -1,11 +1,8 @@
 #!/bin/bash
 . ~/functions_download_dwd.sh
 
-export NCARG_ROOT=/sw/jessie-x64/ncl-6.4.0-nodap-precompiled 
-export PATH=$NCARG_ROOT/bin:$PATH 
-
-export cdo=/sw/jessie-x64/cdo-1.8.0-gccsys/bin/cdo
-export python=/home/mpim/m300382/.conda/envs/my_env/bin/python
+export cdo=/sw/stretch-x64/cdo/cdo-1.9.6-gccsys/bin/cdo
+export python=/home/mpim/m300382/.conda/envs/my_base/bin/python
 
 export year=`date +"%Y"`
 export month=`date +"%m"`
@@ -29,17 +26,31 @@ fi
 
 export run
 
-cd /scratch/local1/m300382/icon_eps
+cd /scratch/local1/m300382/icon_eu_eps
 rm *.grib2
-cp /home/mpim/m300382/icon_eps/*.py ./
+rm *.idx
+cp /home/mpim/m300382/icon_eu_eps/*.py ./
 
 #2-D variables
-export TASK_PYTHON_ICON_EPS="download_merge_2d_variable_icon_eps"
-${python} task_parallelism_general.py t_2m tot_prec u_10m v_10m
+### TODO, use parallel instead than Python
+export TASK_PYTHON_ICON_EU_EPS="download_merge_2d_variable_icon_eu_eps"
+${python} task_parallelism_general.py t_2m tot_prec u_10m v_10m 
 
-export QT_QPA_PLATFORM=offscreen
-${python} /home/mpim/m300382/icon_eps/plot_meteogram.py 
+# Remove hourly data which is too long to process and doesn't add a lot to the analysis
+# maybe we don't have to do it for ICON-EU-EPS
+for i in 001 002 004 005 007 008 010 011 013 014 016 017 019 020 022 023 025 026 028 029 031 032 034 035 037 038 040 041 043 044 046 047; do rm icon-eu-eps_europe_icosahedral_single-level_*_${i}_*.grib2; done
 
-ncftpput -R -v altervista icon_eps /scratch/local1/m300382/icon_eps/meteogram_*
+export QT_QPA_PLATFORM=offscreen # Needed to avoid errors when using Python without display
+source /sw/stretch-x64/conda/anaconda3-5.3.0-python-3.7/bin/activate my_base
 
-cd 
+${python} plot_meteogram.py
+${python} plot_gust.py
+${python} plot_tot_prec.py
+${python} plot_t.py
+
+ncftpput -R -v altervista icon_eu_eps meteogram_*
+ncftpput -R -v altervista icon_eu_eps/prob_prec_50 prob_prec_50_*
+ncftpput -R -v altervista icon_eu_eps/prob_winds_50 prob_winds_50_*
+ncftpput -R -v altervista icon_eu_eps/t2m t2m_*
+
+rm *.png 

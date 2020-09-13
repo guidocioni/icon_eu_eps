@@ -6,7 +6,7 @@ import os
 POLL_INTERVAL = 10.          # seconds between checking status of tasks
 MAX_CONCURRENT =  5          
 
-task_external=os.environ.get('TASK_PYTHON_ICON_EPS')
+task_external=os.environ.get('TASK_PYTHON_ICON_EU_EPS')
 
 def launchTask(script):
 #    print "Launching: ", script

@@ -4,16 +4,18 @@ import pygrib # import pygrib interface to grib_api
 import numpy as np 
 from glob import glob
 import pandas as pd
+import xarray as xr
+
 
 # Default values for reader 
-main_folder='/scratch/local1/m300382/icon_eps/'
-file_prefix='icon-eps_global_icosahedral'
+main_folder='/scratch/local1/m300382/icon_eu_eps/'
+file_prefix='icon-eu-eps_europe_icosahedral'
 level_type='single-level'
 run=''
 variable='t_2m'
 number_ensembles=40
-number_cells=327680
-file_coordinates='/home/mpim/m300382/icon_eps/coord.grib2'
+number_cells=75948
+file_coordinates='/home/mpim/m300382/icon_eu_eps/coord.grib2'
 
 # This is necessary to loop through the grib messages and extract the variables
 variables_names={
@@ -60,6 +62,18 @@ def read_variable(main_folder=main_folder, file_prefix=file_prefix, run=run, var
         var_ens=np.append(var_ens, [temps], axis=0)
     
     return(var_ens) # This gives back an array with [time, number_ensembles, number_cells]
+
+def read_variable_xr(main_folder=main_folder, file_prefix=file_prefix, run=run, variable=variable, level_type=level_type):
+    """Read and concatenate variable from a list of files which is created here,
+    if parameters are not provided then the deafults (here up top) will be used.
+    Since data every 15 minutes are too much to be processed we first split data
+    every 15 minutes with CDO and read data only every hour here. This version 
+    uses xarray to read the grib files. It should be more flexible."""
+
+    files= sorted(glob(main_folder+file_prefix+'_'+level_type+'_'+run+'*'+variable+'.grib2'))
+    datasets = xr.open_mfdataset(files, engine="cfgrib", concat_dim="time")
+    
+    return(datasets)
     
 def read_dates(main_folder=main_folder, file_prefix=file_prefix, run=run):
     "Read dates from the list of files assuming that these will be the same number"
@@ -70,8 +84,6 @@ def read_dates(main_folder=main_folder, file_prefix=file_prefix, run=run):
     for file in files:
         grbs = pygrib.open(file)
         for grb in grbs:
-            dates.append("%d %s" % (grb['forecastTime'], grb.fcstimeunits))          
-    dates=np.array(dates)    
-    u, ind = np.unique(dates, return_index=True)
-    dates_unique=u[np.argsort(ind)]
-    return(pd.date_range(start=grb.analDate, freq='6h', periods=dates_unique.shape[0]))
+            dates.append(grb.validDate)          
+
+    return(pd.to_datetime(np.unique(np.array(dates))))
