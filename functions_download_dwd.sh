@@ -1,170 +1,103 @@
-#Given a variable name and year-month-day-run as environmental variables download and merges the variable
-download_merge_2d_variable_icon_it_de()
-{
-	filename="icon-eu_europe_regular-lat-lon_single-level_${year}${month}${day}${run}_*_${1}.grib2"
-	wget -r -nH -np -nv -nd --reject "index.html*" --cut-dirs=3 -A "${filename}.bz2" "https://opendata.dwd.de/weather/nwp/icon-eu/grib/${run}/${1,,}/"
-	bzip2 -d ${filename}.bz2 
-	${cdo} mergetime ${filename} ${1}_${year}${month}${day}${run}_eur.grib2
-	${cdo} sellonlatbox,${min_lon_it},${max_lon_it},${min_lat_it},${max_lat_it} ${1}_${year}${month}${day}${run}_eur.grib2 ${1}_${year}${month}${day}${run}_it.grib2
-	${cdo} sellonlatbox,${min_lon_de},${max_lon_de},${min_lat_de},${max_lat_de} ${1}_${year}${month}${day}${run}_eur.grib2 ${1}_${year}${month}${day}${run}_de.grib2
-	rm ${1}_${year}${month}${day}${run}_eur.grib2
-	rm ${filename}
+listurls() {
+	filename="$1"
+	url="$2"
+	wget -qO- $url | grep -Eoi '<a [^>]+>' | \
+	grep -Eo 'href="[^\"]+"' | \
+	grep -Eo $filename | \
+	xargs -I {} echo "$url"{}
 }
-export -f download_merge_2d_variable_icon_it_de
-################################################
-download_merge_3d_variable_icon_it_de()
-{
-	filename="icon-eu_europe_regular-lat-lon_pressure-level_${year}${month}${day}${run}_*_${1}.grib2"
-	wget -r -nH -np -nv -nd --reject "index.html*" --cut-dirs=3 -A "${filename}.bz2" "https://opendata.dwd.de/weather/nwp/icon-eu/grib/${run}/${1,,}/"
-	echo 'Extracting files'
-	bzip2 -d ${filename}.bz2 
-	${cdo} mergetime ${filename} ${1}_${year}${month}${day}${run}_eur.grib2
-	${cdo} sellonlatbox,${min_lon_it},${max_lon_it},${min_lat_it},${max_lat_it} ${1}_${year}${month}${day}${run}_eur.grib2 ${1}_${year}${month}${day}${run}_it.grib2
-	${cdo} sellonlatbox,${min_lon_de},${max_lon_de},${min_lat_de},${max_lat_de} ${1}_${year}${month}${day}${run}_eur.grib2 ${1}_${year}${month}${day}${run}_de.grib2
-	rm ${1}_${year}${month}${day}${run}_eur.grib2
-	rm ${filename}
+export -f listurls
+#
+get_and_extract_one() {
+  url="$1"
+  file=`basename $url | sed 's/\.bz2//g'`
+  if [ ! -f "$file" ]; then
+  	wget -t 2 -q -O - "$url" | bzip2 -dc > "$file"
+  fi
 }
-export -f download_merge_3d_variable_icon_it_de
-################################################
-download_merge_2d_variable_icon_eu()
-{
-	filename="icon-eu_europe_regular-lat-lon_single-level_${year}${month}${day}${run}_*_${1}.grib2"
-	wget -r -nH -np -nv -nd --reject "index.html*" --cut-dirs=3 -A "${filename}.bz2" "https://opendata.dwd.de/weather/nwp/icon-eu/grib/${run}/${1,,}/"
-	echo 'Extracting files'
-	bzip2 -d ${filename}.bz2
-	${cdo} mergetime ${filename} ${1}_${year}${month}${day}${run}_eur.grib2
-	rm ${filename}
-}
-export -f download_merge_2d_variable_icon_eu
-################################################
-download_merge_3d_variable_icon_eu()
-{
-	filename="icon-eu_europe_regular-lat-lon_pressure-level_${year}${month}${day}${run}_*_${1}.grib2"
-	wget -r -nH -np -nv -nd --reject "index.html*" --cut-dirs=3 -A "${filename}.bz2" "https://opendata.dwd.de/weather/nwp/icon-eu/grib/${run}/${1,,}/"
-	echo 'Extracting files'
-	bzip2 -d ${filename}.bz2 
-	${cdo} mergetime ${filename} ${1}_${year}${month}${day}${run}_eur.grib2
-	rm ${filename}
-}
-export -f download_merge_3d_variable_icon_eu
-################################################
-download_merge_soil_variable_icon_eu()
-{
-	filename="icon-eu_europe_regular-lat-lon_soil-level_${year}${month}${day}${run}_*_0_${1}.grib2"
-	wget -r -nH -np -nv -nd --reject "index.html*" --cut-dirs=3 -A "${filename}.bz2" "https://opendata.dwd.de/weather/nwp/icon-eu/grib/${run}/${1,,}/"
-	echo 'Extracting files'
-	bzip2 -d ${filename}.bz2
-	${cdo} mergetime ${filename} ${1}_${year}${month}${day}${run}_eur.grib2
-	rm ${filename}
-}
-export -f download_merge_soil_variable_icon_eu
-################################################
-download_merge_2d_variable_icon_globe()
-{
-	filename="icon_global_icosahedral_single-level_${year}${month}${day}${run}_*_${1}.grib2"
-	wget -r -nH -np -nv -nd --reject "index.html*" --cut-dirs=3 -A "${filename}.bz2" "https://opendata.dwd.de/weather/nwp/icon/grib/${run}/${1,,}/"
-	echo 'Extracting files'
-	bzip2 -d ${filename}.bz2 
-	${cdo} -f nc copy -mergetime ${filename} icon_global_icosahedral_single-level_${1}_${year}${month}${day}${run}.nc
-	rm ${filename}
-}
-export -f download_merge_2d_variable_icon_globe
-################################################
-download_merge_3d_variable_icon_globe()
-{
-	filename="icon_global_icosahedral_pressure-level_${year}${month}${day}${run}_*_${1}.grib2"
-	wget -r -nH -np -nv -nd --reject "index.html*" --cut-dirs=3 -A "${filename}.bz2" "https://opendata.dwd.de/weather/nwp/icon/grib/${run}/${1,,}/"
-	echo 'Extracting files'
-	bzip2 -d ${filename}.bz2
-	for level in "300" "500" "700" "850" "950" "1000" ; do
-	 ${cdo} -f nc copy -mergetime icon_global_icosahedral_pressure-level_${year}${month}${day}${run}_*_${level}_${1}.grib2 icon_global_icosahedral_pressure-level_${year}${month}${day}${run}_${level}_${1}.nc
-	 rm icon_global_icosahedral_pressure-level_${year}${month}${day}${run}_*_${level}_${1}.grib2
+export -f get_and_extract_one
+#################
+extract_members() {
+	filename="$1"
+	# infer name of variable by looking inside netcdf
+	name=`cdo vardes ${filename} | awk -F" " 'FNR == 1 {print $2}'`
+	# ensemble members
+	vals=($(seq 2 1 40))
+	for i in "${vals[@]}"; do
+		cdo chname,"${name}_${i}","${name}" -select,name="${name}_${i}" ${filename} ens${i}_${filename}
 	done
-	# First sort files numerically otherwise the levels get screwed up
-	files_to_merge=`ls -v icon_global_icosahedral_pressure-level_${year}${month}${day}${run}_*_${1}.nc` 
-	${cdo} merge ${files_to_merge} icon_global_icosahedral_pressure-level_${1}_${year}${month}${day}${run}.nc
-	rm icon_global_icosahedral_pressure-level_${year}${month}${day}${run}_*_${1}.nc
+	cdo chname,"${name}","${name}" -select,name="${name}" ${filename} ens1_${filename}
 }
-export -f download_merge_3d_variable_icon_globe
-################################################
-download_merge_3d_variable_cosmo_d2()
-{
-	filename="cosmo-d2_germany_regular-lat-lon_pressure-level_${year}${month}${day}${run}_*_${1}.grib2"
-	wget -r -nH -np -nv -nd --reject "index.html*" --cut-dirs=3 -A "${filename}.bz2" "https://opendata.dwd.de/weather/nwp/cosmo-d2/grib/${run}/${1,,}/"
-	echo 'Extracting files'
-	bzip2 -d ${filename}.bz2
-	for level in "200" "300" "400" "500" "700" "850" "950" "975" "1000" ; do
-	 ${cdo} -f nc copy -mergetime cosmo-d2_germany_regular-lat-lon_pressure-level_${year}${month}${day}${run}_*_${level}_${1}.grib2 cosmo-d2_germany_regular-lat-lon_pressure-level_${year}${month}${day}${run}_${level}_${1}.nc
-	 rm cosmo-d2_germany_regular-lat-lon_pressure-level_${year}${month}${day}${run}_*_${level}_${1}.grib2
+export -f extract_members
+#################
+merge_members() {
+	vals=($(seq 1 1 40))
+	for i in "${vals[@]}"; do
+		cdo merge ens${i}_*.nc merged_ens${i}.nc
+		rm ens${i}_*.nc
 	done
-	# First sort files numerically otherwise the levels get screwed up
-	files_to_merge=`ls -v cosmo-d2_germany_regular-lat-lon_pressure-level_${year}${month}${day}${run}_*_${1}.nc` 
-	${cdo} merge ${files_to_merge} cosmo-d2_germany_pressure-level_${year}${month}${day}${run}_${1}.nc
-	rm cosmo-d2_germany_regular-lat-lon_pressure-level_${year}${month}${day}${run}_*_${1}.nc
 }
-export -f download_merge_3d_variable_cosmo_d2
-################################################
-download_merge_2d_variable_cosmo_d2()
+export -f merge_members
+##############################################
+download_merge_2d_variable_icon_eu_eps()
 {
-	filename="cosmo-d2_germany_regular-lat-lon_single-level_${year}${month}${day}${run}_*_${1}.grib2"
-	wget -r -nH -np -nv -nd --reject "index.html" --cut-dirs=3 -A "${filename}.bz2" "https://opendata.dwd.de/weather/nwp/cosmo-d2/grib/${run}/${1,,}/"
-	echo 'Extracting files'
-	bzip2 -d ${filename}.bz2 
-	${cdo} -f nc copy -mergetime ${filename} cosmo-d2_single-level_${1}_${year}${month}${day}${run}.nc
-	rm ${filename}
+	filename="icon-eu-eps_europe_icosahedral_single-level_${year}${month}${day}${run}_*_${1}.grib2"
+	filename_grep="icon-eu-eps_europe_icosahedral_single-level_${year}${month}${day}${run}_(.*)_${1}.grib2.bz2"
+	url="https://opendata.dwd.de/weather/nwp/icon-eu-eps/grib/${run}/${1}/"
+	if [ ! -f "${1}_${year}${month}${day}${run}_eur.nc" ]; then
+		listurls $filename_grep $url | parallel -j 10 get_and_extract_one {}
+		find ${filename} -empty -type f -delete # Remove empty files
+		cdo -f nc setgrid,icon_grid_0028_R02B07_N02.nc -copy -mergetime ${filename} ${1}_${year}${month}${day}${run}_eur.nc
+		rm ${filename}
+		extract_members ${1}_${year}${month}${day}${run}_eur.nc
+		rm ${1}_${year}${month}${day}${run}_eur.nc
+	fi
 }
-export -f download_merge_2d_variable_cosmo_d2
-################################################
-download_merge_2d_variable_cosmo_d2_eps()
-{
-	filename="cosmo-d2-eps_germany_rotated-lat-lon_single-level_${year}${month}${day}${run}_*_${1}.grib2"
-	wget -r -nH -np -nv -nd --reject "index.html" --cut-dirs=3 -A "${filename}.bz2" "https://opendata.dwd.de/weather/nwp/cosmo-d2-eps/grib/${run}/${1}/"
-	echo 'Extracting files'
-	bzip2 -d ${filename}.bz2
-    # Split the minutes
-    for f in cosmo-d2-eps_germany_rotated-lat-lon_single-level_${year}${month}${day}${run}_*_${1}.grib2
-    do 
-        for minutes in 00 15 30 45
-        do
-            NEW=${f%_$1.grib2}_${minutes}_${1}.grib2
-            ${cdo} select,minute=${minutes} ${f} ${NEW}
-        done
-    done
-}
-export -f download_merge_2d_variable_cosmo_d2_eps
-################################################
-download_merge_3d_variable_cosmo_d2_eps()
-{
-	filename="cosmo-d2-eps_germany_rotated-lat-lon_pressure-level_${year}${month}${day}${run}_*_${1}.grib2"
-	wget -r -nH -np -nv -nd --reject "index.html" --cut-dirs=3 -A "${filename}.bz2" "https://opendata.dwd.de/weather/nwp/cosmo-d2-eps/grib/${run}/${1}/"
-	echo 'Extracting files'
-	bzip2 -d ${filename}.bz2
-    # Split the minutes   
-    for f in cosmo-d2-eps_germany_rotated-lat-lon_pressure-level_${year}${month}${day}${run}_*_${1}.grib2
-    do 
-        for minutes in 00 15 30 45
-        do
-            NEW=${f%_$1.grib2}_${minutes}_${1}.grib2
-            ${cdo} select,minute=${minutes} ${f} ${NEW}
-        done
-    done
-}
-export -f download_merge_3d_variable_cosmo_d2_eps
+export -f download_merge_2d_variable_icon_eu_eps
 ################################################
 download_merge_2d_variable_icon_eps()
 {
 	filename="icon-eps_global_icosahedral_single-level_${year}${month}${day}${run}_*_${1}.grib2"
-	wget -r -nH -np -nv -nd --reject "index.html" --cut-dirs=3 -A "${filename}.bz2" "https://opendata.dwd.de/weather/nwp/icon-eps/grib/${run}/${1}/"
-	echo 'Extracting files'
-	bzip2 -d ${filename}.bz2 
+	filename_grep="icon-eps_global_icosahedral_single-level_${year}${month}${day}${run}_(.*)_${1}.grib2.bz2"
+	url="https://opendata.dwd.de/weather/nwp/icon-eps/grib/${run}/${1}/"
+	if [ ! -f "${1}_${year}${month}${day}${run}.nc" ]; then
+		listurls $filename_grep $url | parallel -j 10 get_and_extract_one {}
+		find ${filename} -empty -type f -delete # Remove empty files
+		cdo -f nc setgrid,icon_grid_0024_R02B06_G.nc -copy -mergetime ${filename} ${1}_${year}${month}${day}${run}.nc
+		rm ${filename}
+		extract_members ${1}_${year}${month}${day}${run}.nc
+	fi
 }
 export -f download_merge_2d_variable_icon_eps
 ################################################
-download_merge_2d_variable_icon_eu_eps()
+download_invariant_icon_eu_eps()
 {
-	filename="icon-eu-eps_europe_icosahedral_single-level_${year}${month}${day}${run}_*_${1}.grib2"
-	wget -r -nH -np -nv -nd --reject "index.html" --cut-dirs=3 -A "${filename}.bz2" "https://opendata.dwd.de/weather/nwp/icon-eu-eps/grib/${run}/${1}/"
-	echo 'Extracting files'
+	# download grid
+	filename="icon_grid_0028_R02B07_N02.nc"
+	wget -r -nH -np -nv -nd --reject "index.html*" --cut-dirs=3 -A "${filename}.bz2" "https://opendata.dwd.de/weather/lib/cdo/"
+	bzip2 -d ${filename}.bz2
+	# download hsurf
+	filename="icon-eu-eps_europe_icosahedral_time-invariant_${year}${month}${day}${run}_hsurf.grib2"
+	wget -r -nH -np -nv -nd --reject "index.html*" --cut-dirs=3 -A "${filename}.bz2" "https://opendata.dwd.de/weather/nwp/icon-eu-eps/grib/${run}/hsurf/"
 	bzip2 -d ${filename}.bz2 
+	cdo -f nc setgrid,icon_grid_0028_R02B07_N02.nc -copy ${filename} invariant_hsurf_${year}${month}${day}${run}_eur.nc
+	rm ${filename}
 }
-export -f download_merge_2d_variable_icon_eu_eps
+export -f download_invariant_icon_eu_eps
+##############################################
+download_invariant_icon_eps()
+{
+	# download grid
+	filename="icon_grid_0024_R02B06_G.nc"
+	wget -r -nH -np -nv -nd --reject "index.html*" --cut-dirs=3 -A "${filename}.bz2" "https://opendata.dwd.de/weather/lib/cdo/"
+	bzip2 -d ${filename}.bz2
+	# download hsurf
+	filename="icon-eps_global_icosahedral_time-invariant_${year}${month}${day}${run}_hsurf.grib2"
+	wget -r -nH -np -nv -nd --reject "index.html*" --cut-dirs=3 -A "${filename}.bz2" "https://opendata.dwd.de/weather/nwp/icon-eps/grib/${run}/hsurf/"
+	bzip2 -d ${filename}.bz2 
+	cdo -f nc setgrid,icon_grid_0024_R02B06_G.nc -copy ${filename} invariant_hsurf_${year}${month}${day}${run}_global.nc
+	rm ${filename}
+
+}
+export -f download_invariant_icon_eps
+################################################

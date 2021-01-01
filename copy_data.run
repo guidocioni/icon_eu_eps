@@ -1,8 +1,26 @@
 #!/bin/bash
-. ~/functions_download_dwd.sh
 
-export cdo=/sw/stretch-x64/cdo/cdo-1.9.6-gccsys/bin/cdo
-export python=/home/mpim/m300382/.conda/envs/my_base/bin/python
+# Cd into our working directory in case we're not into it already
+cd "$(dirname "$0")";
+
+echo "----------------------------------------------------------------------------------------------"
+echo "icon-eps: Starting processing of icon-eu model data - `date`"
+echo "----------------------------------------------------------------------------------------------"
+
+# Folder to be used to download and process data
+export MODEL_DATA_FOLDER="/tmp/icon-eps/"
+export HOME_FOLDER=$(pwd)
+export N_CONCUR_PROCESSES=12 # not used anymore as it needs to be tuned per case
+export NCFTP_BOOKMARK="altervista"
+DATA_DOWNLOAD=true
+DATA_PLOTTING=false
+DATA_UPLOAD=false
+
+##### LOAD functions to download model data
+. ./functions_download_dwd.sh
+export SHELL=$(type -p bash)
+# We need to open many files at the same time
+ulimit -Sn 8192
 
 export year=`date +"%Y"`
 export month=`date +"%m"`
@@ -26,31 +44,104 @@ fi
 
 export run
 
-cd /scratch/local1/m300382/icon_eu_eps
-rm *.grib2
-rm *.idx
-cp /home/mpim/m300382/icon_eu_eps/*.py ./
+mkdir -p ${MODEL_DATA_FOLDER}
 
-#2-D variables
-### TODO, use parallel instead than Python
-export TASK_PYTHON_ICON_EU_EPS="download_merge_2d_variable_icon_eu_eps"
-${python} task_parallelism_general.py t_2m tot_prec u_10m v_10m 
+# Move to the data folder to do processing
+cd ${MODEL_DATA_FOLDER} || { echo 'Cannot change to DATA folder' ; exit 1; }
 
-# Remove hourly data which is too long to process and doesn't add a lot to the analysis
-# maybe we don't have to do it for ICON-EU-EPS
-for i in 001 002 004 005 007 008 010 011 013 014 016 017 019 020 022 023 025 026 028 029 031 032 034 035 037 038 040 041 043 044 046 047; do rm icon-eu-eps_europe_icosahedral_single-level_*_${i}_*.grib2; done
+# SECTION 1 - DATA DOWNLOAD ############################################################
 
-export QT_QPA_PLATFORM=offscreen # Needed to avoid errors when using Python without display
-source /sw/stretch-x64/conda/anaconda3-5.3.0-python-3.7/bin/activate my_base
+if [ "$DATA_DOWNLOAD" = true ]; then
+	echo "----------------------------------------------------------------------------------------------"
+	echo "icon-eps: Starting downloading of data - `date`"
+	echo "----------------------------------------------------------------------------------------------"
+	# Remove older files
+	rm ${MODEL_DATA_FOLDER}*.nc
 
-${python} plot_meteogram.py
-${python} plot_gust.py
-${python} plot_tot_prec.py
-${python} plot_t.py
+	# Invariant
+	download_invariant_icon_eu_eps
 
-ncftpput -R -v altervista icon_eu_eps meteogram_*
-ncftpput -R -v altervista icon_eu_eps/prob_prec_50 prob_prec_50_*
-ncftpput -R -v altervista icon_eu_eps/prob_winds_50 prob_winds_50_*
-ncftpput -R -v altervista icon_eu_eps/t2m t2m_*
+	#2-D variables
+	# note that for some reason snow_gsp and snow_con only have all timesteps for 00 and 12 runs
+	variables=("t_2m" "vmax_10m" "tot_prec" "clct" "snow_gsp" "snow_con")
+	parallel -j 5 --delay 1 download_merge_2d_variable_icon_eu_eps ::: "${variables[@]}"
 
-rm *.png 
+	# #3-D variables on pressure levels, not yet supported 
+
+	# # Create 1 file per ensemble member with all variables and timesteps inside 
+	merge_members
+fi 
+
+############################################################
+
+# SECTION 2 - DATA PLOTTING ############################################################
+
+if [ "$DATA_PLOTTING" = true ]; then
+	echo "----------------------------------------------------------------------------------------------"
+	echo "icon-eps: Starting plotting of data - `date`"
+	echo "----------------------------------------------------------------------------------------------"
+	python --version
+	cp ${HOME_FOLDER}/plotting/*.py ${MODEL_DATA_FOLDER}
+
+	export QT_QPA_PLATFORM=offscreen # Needed to avoid errors when using Python without display
+
+	python plot_meteogram.py
+
+	scripts=("plot_gust.py" "plot_tot_prec.py" "plot_t.py")
+
+	projections=("euratl")
+
+	parallel -j 5 python ::: "${scripts[@]}" ::: "${projections[@]}"
+	rm ${MODEL_DATA_FOLDER}*.py
+fi
+
+############################################################
+
+
+# SECTION 3 - IMAGES UPLOAD ############################################################
+# Use ncftpbookmarks to add a new FTP server with credentials
+if [ "$DATA_UPLOAD" = true ]; then
+	echo "----------------------------------------------------------------------------------------------"
+	echo "icon-eps: Starting FTP uploading - `date`"
+	echo "----------------------------------------------------------------------------------------------"
+	# First upload meteograms
+	ncftpput -R -v -DD -m ${NCFTP_BOOKMARK} icon_eu_eps meteogram_*
+	#
+	# Then upload the other pictures
+	#
+	images_output=("prob_prec_50" "prob_winds_50" "t2m")
+
+	# suffix for naming
+	projections_output=("")
+	# remote folder on server
+	projections_output_folder=("icon_eu_eps")
+
+	# Create a lisf of all the images to upload 
+	upload_elements=()
+	for i in "${!projections_output[@]}"; do
+		for j in "${images_output[@]}"; do
+				upload_elements+=("${projections_output_folder[$i]}/${j} ./${projections_output[$i]}${j}_*")
+		done
+	done
+
+
+	for k in "${upload_elements[@]}"; do
+		ncftpput -R -v -DD -m ${NCFTP_BOOKMARK} ${k}
+	done
+	# For some reason the parallel version does not work
+	# parallel -j 1 --link ncftpput -R -v -DD ${NCFTP_BOOKMARK} ::: ${upload_folder[@]} ::: ${upload_elements[@]}
+
+	rm ${MODEL_DATA_FOLDER}*.png
+fi 
+
+############################################################
+
+# SECTION 4 - CLEANING ############################################################
+
+echo "----------------------------------------------------------------------------------------------"
+echo "icon-eps: Finished cleaning up - `date`"
+echo "----------------------------------------------------------------------------------------------"
+
+############################################################
+
+cd -
