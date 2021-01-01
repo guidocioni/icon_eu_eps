@@ -47,7 +47,7 @@ else:
 options_savefig = {
     'dpi':100,
     'bbox_inches':'tight',
-    'transparent':True
+    'transparent': False
 }
 
 # Dictionary to map the output folder based on the projection employed
