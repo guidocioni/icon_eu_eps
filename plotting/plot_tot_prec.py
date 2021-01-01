@@ -34,6 +34,7 @@ def main():
         ds = ((dset['tp'] > threshold).sum(dim='realization') / 40)*100
         ds.attrs['threshold'] = threshold
         ds['run'] = dset['run']
+        ds = ds.load()
 
         _ = plt.figure(figsize=(figsize_x, figsize_y))
 
