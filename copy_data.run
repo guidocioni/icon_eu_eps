@@ -13,8 +13,8 @@ export HOME_FOLDER=$(pwd)
 export N_CONCUR_PROCESSES=12 # not used anymore as it needs to be tuned per case
 export NCFTP_BOOKMARK="altervista"
 DATA_DOWNLOAD=true
-DATA_PLOTTING=false
-DATA_UPLOAD=false
+DATA_PLOTTING=true
+DATA_UPLOAD=true
 
 ##### LOAD functions to download model data
 . ./functions_download_dwd.sh
@@ -85,9 +85,9 @@ if [ "$DATA_PLOTTING" = true ]; then
 
 	export QT_QPA_PLATFORM=offscreen # Needed to avoid errors when using Python without display
 
-	python plot_meteogram.py
+	# python plot_meteogram.py
 
-	scripts=("plot_gust.py" "plot_tot_prec.py" "plot_t.py")
+	scripts=("plot_max_gust.py" "plot_tot_prec.py" "plot_snow.py")
 
 	projections=("euratl")
 
@@ -105,11 +105,11 @@ if [ "$DATA_UPLOAD" = true ]; then
 	echo "icon-eps: Starting FTP uploading - `date`"
 	echo "----------------------------------------------------------------------------------------------"
 	# First upload meteograms
-	ncftpput -R -v -DD -m ${NCFTP_BOOKMARK} icon_eu_eps meteogram_*
+	#ncftpput -R -v -DD -m ${NCFTP_BOOKMARK} icon_eu_eps meteogram_*
 	#
 	# Then upload the other pictures
 	#
-	images_output=("prob_prec_50" "prob_winds_50" "t2m")
+	images_output=("prob_prec_50" "prob_winds_50" "prob_snow")
 
 	# suffix for naming
 	projections_output=("")
@@ -128,8 +128,6 @@ if [ "$DATA_UPLOAD" = true ]; then
 	for k in "${upload_elements[@]}"; do
 		ncftpput -R -v -DD -m ${NCFTP_BOOKMARK} ${k}
 	done
-	# For some reason the parallel version does not work
-	# parallel -j 1 --link ncftpput -R -v -DD ${NCFTP_BOOKMARK} ::: ${upload_folder[@]} ::: ${upload_elements[@]}
 
 	rm ${MODEL_DATA_FOLDER}*.png
 fi 
