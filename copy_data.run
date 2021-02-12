@@ -11,7 +11,7 @@ echo "--------------------------------------------------------------------------
 export MODEL_DATA_FOLDER="/tmp/icon-eps/"
 export HOME_FOLDER=$(pwd)
 export N_CONCUR_PROCESSES=12 # not used anymore as it needs to be tuned per case
-export NCFTP_BOOKMARK="altervista"
+export NCFTP_BOOKMARK="mid"
 DATA_DOWNLOAD=true
 DATA_PLOTTING=true
 DATA_UPLOAD=true
@@ -22,27 +22,26 @@ export SHELL=$(type -p bash)
 # We need to open many files at the same time
 ulimit -Sn 8192
 
-export year=`date +"%Y"`
-export month=`date +"%m"`
-export day=`date +"%d"`
-export hour=`date +"%H"`
-export hour_no_zero=`date -u +"%-H"`
-
-if [ "$hour_no_zero" -ge 4 ] && [ "$hour_no_zero" -lt 10 ] 
-then 
- run="00"
-elif [ "$hour_no_zero" -ge 10 ] && [ "$hour_no_zero" -lt 16 ] 
-then
- run="06"
-elif [ "$hour_no_zero" -ge 16 ] && [ "$hour_no_zero" -lt 21 ] 
-then
- run="12"
-elif [ "$hour_no_zero" -ge 21 ] 
-then
- run="18"
+# Retrieve run ##########################
+latest_run=`python get_last_run.py`
+if [ -f $MODEL_DATA_FOLDER/last_processed_run.txt ]; then
+	latest_processed_run=`while read line; do echo $line; done < $MODEL_DATA_FOLDER/last_processed_run.txt`
+	if [ $latest_run -gt $latest_processed_run ]; then
+		echo "New run ${latest_run} found! Last processed run was ${latest_processed_run}."
+	else
+		echo "Run ${latest_processed_run} already processed, exiting"
+		exit 0
+	fi
 fi
 
-export run
+export year=${latest_run:0:4} 
+export month=${latest_run:4:2} 
+export day=${latest_run:6:2} 
+export run=${latest_run:8:2}
+
+echo "Processing run ${latest_run}"
+
+###########################################
 
 mkdir -p ${MODEL_DATA_FOLDER}
 
@@ -63,7 +62,7 @@ if [ "$DATA_DOWNLOAD" = true ]; then
 
 	#2-D variables
 	# note that for some reason snow_gsp and snow_con only have all timesteps for 00 and 12 runs
-	variables=("t_2m" "vmax_10m" "tot_prec" "clct" "snow_gsp" "snow_con")
+	variables=("t_2m" "vmax_10m" "tot_prec" "clct" "snow_gsp" "snow_con" "cape_ml")
 	parallel -j 5 --delay 1 download_merge_2d_variable_icon_eu_eps ::: "${variables[@]}"
 
 	# #3-D variables on pressure levels, not yet supported 
@@ -96,6 +95,18 @@ if [ "$DATA_PLOTTING" = true ]; then
 fi
 
 ############################################################
+
+# If we at least produced some netcdf and images we assume the run is succesfull and 
+# store the run processed in a text file. Unfortunately there is no easy way to check
+# if the processing is really succesfull as we have many errors in the process that
+# don't undermine the whole processing! 
+
+N_NETCDF_FILES=`find . -type f -name '*.nc' -printf x | wc -c`
+N_IMAGES=`find . -type f -name '*.png' -printf x | wc -c`
+
+if [ $N_NETCDF_FILES -ge 2 ] && [ $N_IMAGES -ge 10 ]; then
+	echo ${latest_run} > last_processed_run.txt
+fi
 
 
 # SECTION 3 - IMAGES UPLOAD ############################################################
