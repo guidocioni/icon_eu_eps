@@ -179,7 +179,9 @@ def read_dataset(engine='scipy'):
                              combine='nested',
                              preprocess=preprocess)
     dset = dset.metpy.parse_cf()
-    dset['run'] = dset.time[0]
+    run = pd.to_datetime(re.findall(r'(?:\d{10})', files[0])[0],
+                         format='%Y%m%d%H')
+    dset['run'] = run
     invariant = xr.open_mfdataset(invariant_file).squeeze()
     dset = xr.merge([dset, invariant])
 

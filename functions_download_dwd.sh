@@ -33,7 +33,7 @@ export -f extract_members
 merge_members() {
 	vals=($(seq 1 1 40))
 	for i in "${vals[@]}"; do
-		cdo merge ens${i}_*.nc merged_ens${i}.nc
+		cdo merge ens${i}_*.nc merged_ens${i}_${year}${month}${day}${run}.nc
 		rm ens${i}_*.nc
 	done
 }
