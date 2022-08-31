@@ -8,7 +8,7 @@ echo "icon-eps: Starting processing of icon-eu model data - `date`"
 echo "----------------------------------------------------------------------------------------------"
 
 # Folder to be used to download and process data
-export MODEL_DATA_FOLDER="/tmp/icon-eps/"
+export MODEL_DATA_FOLDER="/home/ekman/ssd/guido/icon-eps/"
 export HOME_FOLDER=$(pwd)
 export N_CONCUR_PROCESSES=12 # not used anymore as it needs to be tuned per case
 export NCFTP_BOOKMARK="mid"
@@ -62,10 +62,9 @@ if [ "$DATA_DOWNLOAD" = true ]; then
 
 	#2-D variables
 	# note that for some reason snow_gsp and snow_con only have all timesteps for 00 and 12 runs
-	variables=("t_2m" "vmax_10m" "tot_prec" "clct" "snow_gsp" "snow_con" "cape_ml")
-	parallel -j 5 --delay 1 download_merge_2d_variable_icon_eu_eps ::: "${variables[@]}"
-
-	# #3-D variables on pressure levels, not yet supported 
+	# so for all other runs less timesteps will be present in the output    
+	variables=("t_2m" "vmax_10m" "tot_prec" "clct" "snow_gsp" "snow_con")
+	parallel -j 2 --delay 1 download_merge_2d_variable_icon_eu_eps ::: "${variables[@]}"
 
 	# # Create 1 file per ensemble member with all variables and timesteps inside 
 	merge_members
@@ -90,7 +89,7 @@ if [ "$DATA_PLOTTING" = true ]; then
 
 	projections=("euratl")
 
-	parallel -j 5 python ::: "${scripts[@]}" ::: "${projections[@]}"
+	parallel -j 1 python ::: "${scripts[@]}" ::: "${projections[@]}"
 	rm ${MODEL_DATA_FOLDER}*.py
 fi
 
@@ -135,12 +134,15 @@ if [ "$DATA_UPLOAD" = true ]; then
 		done
 	done
 
-
-	for k in "${upload_elements[@]}"; do
-		ncftpput -R -v -DD -m ${NCFTP_BOOKMARK} ${k}
+	num_procs=5
+	num_iters=${#upload_elements[@]}
+	num_jobs="\j"  # The prompt escape for number of jobs currently running
+	for ((i=0; i<num_iters; i++)); do
+		while (( ${num_jobs@P} >= num_procs )); do
+		wait -n
+		done
+	ncftpput -R -v -DD -m ${NCFTP_BOOKMARK} ${upload_elements[$i]} &
 	done
-
-	rm ${MODEL_DATA_FOLDER}*.png
 fi 
 
 ############################################################

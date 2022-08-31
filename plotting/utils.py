@@ -33,7 +33,7 @@ else:
 
 folder_images = folder
 chunks_size = 10
-processes = 9
+processes = 2
 figsize_x = 11
 figsize_y = 9
 invariant_file = folder+'invariant_*.nc'
