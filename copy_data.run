@@ -8,13 +8,13 @@ echo "icon-eps: Starting processing of icon-eu model data - `date`"
 echo "----------------------------------------------------------------------------------------------"
 
 # Folder to be used to download and process data
-export MODEL_DATA_FOLDER="/home/ekman/ssd/guido/icon-eps/"
+export MODEL_DATA_FOLDER="/home/ekman/ssd/guido/icon-eu-eps/"
 export HOME_FOLDER=$(pwd)
 export N_CONCUR_PROCESSES=12 # not used anymore as it needs to be tuned per case
 export NCFTP_BOOKMARK="mid"
 DATA_DOWNLOAD=true
-DATA_PLOTTING=true
-DATA_UPLOAD=true
+DATA_PLOTTING=false
+DATA_UPLOAD=false
 
 ##### LOAD functions to download model data
 . ./functions_download_dwd.sh
@@ -56,6 +56,8 @@ if [ "$DATA_DOWNLOAD" = true ]; then
 	echo "----------------------------------------------------------------------------------------------"
 	# Remove older files
 	rm ${MODEL_DATA_FOLDER}*.nc
+	rm ${MODEL_DATA_FOLDER}*.idx
+	rm ${MODEL_DATA_FOLDER}*.grib2
 
 	# Invariant
 	download_invariant_icon_eu_eps
@@ -63,11 +65,10 @@ if [ "$DATA_DOWNLOAD" = true ]; then
 	#2-D variables
 	# note that for some reason snow_gsp and snow_con only have all timesteps for 00 and 12 runs
 	# so for all other runs less timesteps will be present in the output    
-	variables=("t_2m" "vmax_10m" "tot_prec" "clct" "snow_gsp" "snow_con")
+	variables=("t_2m" "clct" "snow_gsp" "snow_con" "tot_prec" "vmax_10m")
 	parallel -j 2 --delay 1 download_merge_2d_variable_icon_eu_eps ::: "${variables[@]}"
 
-	# # Create 1 file per ensemble member with all variables and timesteps inside 
-	merge_members
+	download_merge_3d_variable_icon_eu_eps t
 fi 
 
 ############################################################

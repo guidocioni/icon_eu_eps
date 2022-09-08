@@ -29,7 +29,7 @@ apiURL_places = "https://api.mapbox.com/geocoding/v5/mapbox.places"
 if 'MODEL_DATA_FOLDER' in os.environ:
     folder = os.environ['MODEL_DATA_FOLDER']
 else:
-    folder = '/tmp/icon-eps/'
+    folder = '/home/ekman/ssd/guido/icon-eu-eps'
 
 folder_images = folder
 chunks_size = 10
@@ -140,69 +140,38 @@ proj_defs = {
 }
 
 
-def get_weather_icons(ww, time):
-    #from matplotlib._png import read_png
-    """
-    Get the path to a png given the weather representation 
-    """
-    weather = []
-    for w in ww.values:
-        if w.astype(int).astype(str) in WMO_GLYPH_LOOKUP_PNG:
-            weather.append(WMO_GLYPH_LOOKUP_PNG[w.astype(int).astype(str)])
-        else:
-            weather.append('empty')
-    weather_icons=[]
-    for date, weath in zip(time, weather):
-        if date.hour >= 6 and date.hour <= 18:
-            add_string='d'
-        elif date.hour >=0 and date.hour < 6:
-            add_string='n'
-        elif date.hour >18 and date.hour < 24:
-            add_string='n'
-
-        pngfile=folder_glyph+'%s.png' % (weath+add_string)
-        if os.path.isfile(pngfile):
-            weather_icons.append(read_png(pngfile))
-        else:
-            pngfile=folder_glyph+'%s.png' % weath
-            weather_icons.append(read_png(pngfile))
-
-    return(weather_icons)
-
-
-def read_dataset(engine='scipy'):
+def read_dataset(vars=['tmax_2m', 'vmax_10m'],
+                 region=None):
     """Wrapper to initialize the dataset"""
-    files = glob(folder+'merged_ens*.nc')
-    dset = xr.open_mfdataset(files,
-                             engine=engine,
-                             concat_dim='realization',
-                             combine='nested',
-                             preprocess=preprocess)
+    dss = []
+    for var in vars:
+        dss.append(xr.open_mfdataset(f"{folder}/*{var}*.grib2"))
+    dset = xr.merge(dss, compat='override')
+    grid = xr.open_dataset(f"{folder}/icon_grid_0028_R02B07_N02.nc")
+    dset = dset.assign_coords(
+        {'values': grid.rename_dims({'cell': 'values'}).clat})
+    dset['clon'] = np.rad2deg(dset['clon'])
+    dset['clat'] = np.rad2deg(dset['clat'])
+    dset = dset.chunk({'number': 1})
     dset = dset.metpy.parse_cf()
-    run = pd.to_datetime(re.findall(r'(?:\d{10})', files[0])[0],
-                         format='%Y%m%d%H')
-    dset['run'] = run
-    invariant = xr.open_mfdataset(invariant_file).squeeze()
-    dset = xr.merge([dset, invariant])
+
+    if region:
+        proj = proj_defs[region]
+        min_lon, max_lon = proj['llcrnrlon'], proj['urcrnrlon']
+        min_lat, max_lat = proj['llcrnrlat'], proj['urcrnrlat']
+        dset = dset.where((dset.clon >= min_lon) & (dset.clat >= min_lat) & (
+            dset.clat <= max_lat) & (dset.clon <= max_lon), drop=True)
 
     return dset
 
 
 def get_time_run_cum(dset):
-    time = dset['time'].to_pandas()
-    run = dset['run'].to_pandas()
-    cum_hour = np.array((time - run) / pd.Timedelta('1 hour')).astype(int)
+    time = dset['valid_time'].values
+    run = dset['time'].values
+    cum_hour = np.array(dset['step'].values /
+                        pd.Timedelta('1 hour')).astype(int)
 
     return time, run, cum_hour
-
-
-def preprocess(ds):
-    '''Additional preprocessing step to apply to the datasets'''
-    # correct gust attributes typo
-    if 'VMAX_10M' in ds.variables.keys():
-        ds['VMAX_10M'].attrs['units'] = 'm/s'
-
-    return ds.squeeze(drop=True)
 
 
 def print_message(message):
@@ -217,8 +186,6 @@ def get_coordinates(ds):
         longitude = ds['tlon']
         latitude = ds['tlat']
     elif ('clat' in ds.variables.keys()) and ('clon' in ds.variables.keys()):
-        ds.clon.metpy.convert_units('degrees')
-        ds.clat.metpy.convert_units('degrees')
         longitude = ds['clon']
         latitude = ds['clat']
 
@@ -260,115 +227,83 @@ def get_city_coordinates(city):
         return lon, lat
 
 
-def get_projection(dset, projection="euratl", countries=True, labels=True):
+def get_projection(dset, projection="euratl", countries=True, labels=True, regions=True):
     lon, lat = get_coordinates(dset)
     from mpl_toolkits.basemap import Basemap  # import Basemap matplotlib toolkit
-    proj_options =proj_defs[projection]
+    proj_options = proj_defs[projection]
     m = Basemap(**proj_options)
-    if projection == "euratl":
+    if projection == "de":
+        if regions:
+            m.readshapefile(home_folder + '/plotting/shapefiles/DEU_adm/DEU_adm1',
+                            'DEU_adm1', linewidth=0.2, color='black', zorder=5)
         if labels:
-            m.drawparallels(np.arange(-90.0, 90.0, 10.), linewidth=0.2, color='white',
-                labels=[True, False, False, True], fontsize=7)
-            m.drawmeridians(np.arange(0.0, 360.0, 10.), linewidth=0.2, color='white',
-                labels=[True, False, False, True], fontsize=7)
-
+            m.drawparallels(np.arange(-80., 81., 2), linewidth=0.2, color='white',
+                            labels=[True, False, False, True], fontsize=7)
+            m.drawmeridians(np.arange(-180., 181., 2), linewidth=0.2, color='white',
+                            labels=[True, False, False, True], fontsize=7)
     elif projection == "it":
-        m.readshapefile(home_folder + '/plotting/shapefiles/ITA_adm/ITA_adm1',
-                            'ITA_adm1',linewidth=0.2,color='black',zorder=7)
+        if regions:
+            m.readshapefile(home_folder + '/plotting/shapefiles/ITA_adm/ITA_adm1',
+                            'ITA_adm1', linewidth=0.2, color='black', zorder=5)
         if labels:
-            m.drawparallels(np.arange(-90.0, 90.0, 5.), linewidth=0.2, color='white',
-                labels=[True, False, False, True], fontsize=7)
-            m.drawmeridians(np.arange(0.0, 360.0, 5.), linewidth=0.2, color='white',
-                labels=[True, False, False, True], fontsize=7)
-    elif projection == "de":
-        m.readshapefile(home_folder + '/plotting/shapefiles/DEU_adm/DEU_adm1',
-                            'DEU_adm1',linewidth=0.2,color='black',zorder=7)
+            m.drawparallels(np.arange(-80., 81., 2), linewidth=0.2, color='white',
+                            labels=[True, False, False, True], fontsize=7)
+            m.drawmeridians(np.arange(-180., 181., 2), linewidth=0.2, color='white',
+                            labels=[True, False, False, True], fontsize=7)
+    elif projection == "nord":
+        if regions:
+            m.readshapefile(home_folder + '/plotting/shapefiles/DEU_adm/DEU_adm1',
+                            'DEU_adm1', linewidth=0.2, color='black', zorder=5)
         if labels:
-            m.drawparallels(np.arange(-90.0, 90.0, 5.), linewidth=0.2, color='white',
-                labels=[True, False, False, True], fontsize=7)
-            m.drawmeridians(np.arange(0.0, 360.0, 5.), linewidth=0.2, color='white',
-                labels=[True, False, False, True], fontsize=7)
+            m.drawparallels(np.arange(-80., 81., 2), linewidth=0.2, color='white',
+                            labels=[True, False, False, True], fontsize=7)
+            m.drawmeridians(np.arange(-180., 181., 2), linewidth=0.2, color='white',
+                            labels=[True, False, False, True], fontsize=7)
 
-    m.drawcoastlines(linewidth=0.5, linestyle='solid', color='black', zorder=7)
+    m.drawcoastlines(linewidth=0.5, linestyle='solid', color='black', zorder=5)
     if countries:
-        m.drawcountries(linewidth=0.5, linestyle='solid', color='black', zorder=7)
+        m.drawcountries(linewidth=0.5, linestyle='solid',
+                        color='black', zorder=5)
 
     x, y = m(lon, lat)
 
-    return(m, x, y)
-
-
-# def get_projection_cartopy(plt, projection="euratl"):
-#     '''Retrieve the projection using cartopy'''
-#     print('projection = %s' % projection)
-#     import cartopy.crs as ccrs
-#     import cartopy.feature as cfeature
-#     import cartopy.io.shapereader as shpreader
-
-#     # If projection is "euratl" we don't have to do anything,
-#     # the correct extents will be set automatically 
-
-#     ax = plt.axes(projection=ccrs.PlateCarree())
-        
-#     if projection=="it":
-#         ax.set_extent([6, 19, 36, 48], ccrs.PlateCarree())
-#         adm1_shapes = shpreader.Reader(home_folder + '/plotting/shapefiles/ITA_adm/ITA_adm1.shp').geometries()
-#         ax.add_geometries(adm1_shapes, ccrs.PlateCarree(), edgecolor="black", facecolor="None", linewidth=0.5)
-#         ax.coastlines(resolution='10m')
-#         ax.add_feature(cfeature.BORDERS.with_scale('10m'))
-#     elif projection=="de":
-#         ax.set_extent([5, 16, 46.5, 56], ccrs.PlateCarree())
-#         adm1_shapes = shpreader.Reader(home_folder + '/plotting/shapefiles/DEU_adm/DEU_adm1.shp').geometries()
-#         ax.add_geometries(adm1_shapes, ccrs.PlateCarree(), edgecolor="black", facecolor="None")
-#         ax.coastlines(resolution='10m')
-#         ax.add_feature(cfeature.BORDERS.with_scale('10m'))
-#     elif projection=="euratl":
-#         ax.coastlines(resolution='50m')
-#         ax.add_feature(cfeature.BORDERS.with_scale('50m'))
-
-#     return(ax)
-
-
-def chunks(l, n):
-    """Yield successive n-sized chunks from l."""
-    for i in range(0, len(l), n):
-        yield l[i:i + n]
+    return (m, x, y)
 
 
 def chunks_dataset(ds, n):
     """Same as 'chunks' but for the time dimension in
     a dataset"""
-    for i in range(0, len(ds.time), n):
-        yield ds.isel(time=slice(i, i + n))
+    for i in range(0, len(ds.step), n):
+        yield ds.isel(step=slice(i, i + n))
 
 
-# Annotation run, models 
-def annotation_run(ax, time, loc='upper right',fontsize=8):
+# Annotation run, models
+def annotation_run(ax, time, loc='upper right', fontsize=8):
     """Put annotation of the run obtaining it from the
     time array passed to the function."""
     time = pd.to_datetime(time)
-    at = AnchoredText('Run %s'% time.strftime('%Y%m%d %H UTC'), 
-                       prop=dict(size=fontsize), frameon=True, loc=loc)
+    at = AnchoredText('Run %s' % time.strftime('%Y%m%d %H UTC'),
+                      prop=dict(size=fontsize), frameon=True, loc=loc)
     at.patch.set_boxstyle("round,pad=0.,rounding_size=0.1")
     at.zorder = 10
     ax.add_artist(at)
-    return(at)
+    return (at)
 
 
 def annotation_forecast(ax, time, loc='upper left', fontsize=8, local=True):
     """Put annotation of the forecast time."""
     time = pd.to_datetime(time)
-    if local: # convert to local time
+    if local:  # convert to local time
         time = convert_timezone(time)
-        at = AnchoredText('Valid %s' % time.strftime('%A %d %b %Y at %H (Berlin)'), 
-                       prop=dict(size=fontsize), frameon=True, loc=loc)
+        at = AnchoredText('Valid %s' % time.strftime('%A %d %b %Y at %H (Berlin)'),
+                          prop=dict(size=fontsize), frameon=True, loc=loc)
     else:
-        at = AnchoredText('Forecast for %s' % time.strftime('%A %d %b %Y at %H UTC'), 
-                       prop=dict(size=fontsize), frameon=True, loc=loc)
+        at = AnchoredText('Forecast for %s' % time.strftime('%A %d %b %Y at %H UTC'),
+                          prop=dict(size=fontsize), frameon=True, loc=loc)
     at.patch.set_boxstyle("round,pad=0.,rounding_size=0.1")
     at.zorder = 10
     ax.add_artist(at)
-    return(at)
+    return (at)
 
 
 def add_logo_on_map(ax, logo=home_folder+'/plotting/meteoindiretta_logo.png', zoom=0.15, pos=(0.92, 0.1)):
@@ -390,13 +325,14 @@ def convert_timezone(dt_from, from_tz='utc', to_tz='Europe/Berlin'):
     return dt_to.tz_localize(None)
 
 
-def annotation(ax, text, loc='upper right',fontsize=8):
+def annotation(ax, text, loc='upper right', fontsize=8):
     """Put a general annotation in the plot."""
-    at = AnchoredText('%s'% text, prop=dict(size=fontsize), frameon=True, loc=loc)
+    at = AnchoredText('%s' % text, prop=dict(
+        size=fontsize), frameon=True, loc=loc)
     at.patch.set_boxstyle("round,pad=0.,rounding_size=0.1")
     at.zorder = 10
     ax.add_artist(at)
-    return(at)
+    return (at)
 
 
 def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=256):
@@ -404,42 +340,46 @@ def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=256):
     new_cmap = colors.LinearSegmentedColormap.from_list(
         'trunc({n},{a:.2f},{b:.2f})'.format(n=cmap.name, a=minval, b=maxval),
         cmap(np.linspace(minval, maxval, n)))
-    return(new_cmap)
+    return (new_cmap)
 
 
 def get_colormap(cmap_type):
     """Create a custom colormap."""
-    colors_tuple = pd.read_csv(home_folder + '/plotting/cmap_%s.rgba' % cmap_type).values 
+    colors_tuple = pd.read_csv(
+        home_folder + '/plotting/cmap_%s.rgba' % cmap_type).values
 
-    cmap = colors.LinearSegmentedColormap.from_list(cmap_type, colors_tuple, colors_tuple.shape[0])
-    return(cmap)
+    cmap = colors.LinearSegmentedColormap.from_list(
+        cmap_type, colors_tuple, colors_tuple.shape[0])
+    return (cmap)
 
 
 def get_colormap_norm(cmap_type, levels):
     """Create a custom colormap."""
     if cmap_type == "rain":
         cmap, norm = from_levels_and_colors(levels, sns.color_palette("Blues", n_colors=len(levels)),
-                                                    extend='max')
+                                            extend='max')
     elif cmap_type == "snow":
         cmap, norm = from_levels_and_colors(levels, sns.color_palette("PuRd", n_colors=len(levels)),
-                                                    extend='max')
-    elif cmap_type == "snow_discrete":    
-        colors = ["#DBF069","#5AE463","#E3BE45","#65F8CA","#32B8EB",
-                    "#1D64DE","#E97BE4","#F4F476","#E78340","#D73782","#702072"]
+                                            extend='max')
+    elif cmap_type == "snow_discrete":
+        colors = ["#DBF069", "#5AE463", "#E3BE45", "#65F8CA", "#32B8EB",
+                  "#1D64DE", "#E97BE4", "#F4F476", "#E78340", "#D73782", "#702072"]
         cmap, norm = from_levels_and_colors(levels, colors, extend='max')
-    elif cmap_type == "rain_acc":    
+    elif cmap_type == "rain_acc":
         cmap, norm = from_levels_and_colors(levels, sns.color_palette('gist_stern_r', n_colors=len(levels)),
-                         extend='max')
+                                            extend='max')
     elif cmap_type == "rain_new":
-        colors_tuple = pd.read_csv(home_folder + '/plotting/cmap_prec.rgba').values    
+        colors_tuple = pd.read_csv(
+            home_folder + '/plotting/cmap_prec.rgba').values
         cmap, norm = from_levels_and_colors(levels, sns.color_palette(colors_tuple, n_colors=len(levels)),
-                         extend='max')
+                                            extend='max')
     elif cmap_type == "winds":
-        colors_tuple = pd.read_csv(home_folder + '/plotting/cmap_winds.rgba').values    
+        colors_tuple = pd.read_csv(
+            home_folder + '/plotting/cmap_winds.rgba').values
         cmap, norm = from_levels_and_colors(levels, sns.color_palette(colors_tuple, n_colors=len(levels)),
-                         extend='max')
+                                            extend='max')
 
-    return(cmap, norm)
+    return (cmap, norm)
 
 
 def remove_collections(elements):
@@ -447,7 +387,7 @@ def remove_collections(elements):
     touching the background, which can then be used afterwards."""
     for element in elements:
         try:
-            for coll in element.collections: 
+            for coll in element.collections:
                 coll.remove()
         except AttributeError:
             try:
@@ -495,22 +435,22 @@ def plot_maxmin_points(ax, lon, lat, data, extrema, nsize, symbol, color='k',
         raise ValueError('Value for hilo must be either max or min')
 
     mxy, mxx = np.where(data_ext == data)
-    # Filter out points on the border 
+    # Filter out points on the border
     mxx, mxy = mxx[(mxy != 0) & (mxx != 0)], mxy[(mxy != 0) & (mxx != 0)]
 
     texts = []
     for i in range(len(mxy)):
-        texts.append( ax.text(lon[mxy[i], mxx[i]], lat[mxy[i], mxx[i]], symbol, color=color, size=15,
-                clip_on=True, horizontalalignment='center', verticalalignment='center',
-                path_effects=[path_effects.withStroke(linewidth=1, foreground="black")], zorder=6) )
-        texts.append( ax.text(lon[mxy[i], mxx[i]], lat[mxy[i], mxx[i]], '\n' + str(data[mxy[i], mxx[i]].astype('int')),
-                color="gray", size=10, clip_on=True, fontweight='bold',
-                horizontalalignment='center', verticalalignment='top', zorder=6) )
-    return(texts)
+        texts.append(ax.text(lon[mxy[i], mxx[i]], lat[mxy[i], mxx[i]], symbol, color=color, size=15,
+                             clip_on=True, horizontalalignment='center', verticalalignment='center',
+                             path_effects=[path_effects.withStroke(linewidth=1, foreground="black")], zorder=6))
+        texts.append(ax.text(lon[mxy[i], mxx[i]], lat[mxy[i], mxx[i]], '\n' + str(data[mxy[i], mxx[i]].astype('int')),
+                             color="gray", size=10, clip_on=True, fontweight='bold',
+                             horizontalalignment='center', verticalalignment='top', zorder=6))
+    return (texts)
 
 
 def add_vals_on_map(ax, projection, var, levels, density=50,
-                     cmap='rainbow', shift_x=0., shift_y=0., fontsize=8, lcolors=True):
+                    cmap='rainbow', shift_x=0., shift_y=0., fontsize=8, lcolors=True):
     '''Given an input projection, a variable containing the values and a plot put
     the values on a map exlcuing NaNs and taking care of not going
     outside of the map boundaries, which can happen.
@@ -522,7 +462,7 @@ def add_vals_on_map(ax, projection, var, levels, density=50,
 
     proj_options = proj_defs[projection]
     lon_min, lon_max, lat_min, lat_max = proj_options['llcrnrlon'], proj_options['urcrnrlon'],\
-                                         proj_options['llcrnrlat'], proj_options['urcrnrlat']
+        proj_options['llcrnrlat'], proj_options['urcrnrlat']
 
     # Remove values outside of the extents
     var = var.sel(lat=slice(lat_min + 0.15, lat_max - 0.15),
@@ -533,12 +473,32 @@ def add_vals_on_map(ax, projection, var, levels, density=50,
     at = []
     for ilat, ilon in np.ndindex(var.shape):
         if lcolors:
-            at.append(ax.annotate(('%d'%var[ilat, ilon]), (lons[ilon] + shift_x, lats[ilat] + shift_y),
-                             color = m.to_rgba(float(var[ilat, ilon])), weight='bold', fontsize=fontsize,
-                              path_effects=[path_effects.withStroke(linewidth=1, foreground="black")], zorder=5))
+            at.append(ax.annotate(('%d' % var[ilat, ilon]), (lons[ilon] + shift_x, lats[ilat] + shift_y),
+                                  color=m.to_rgba(float(var[ilat, ilon])), weight='bold', fontsize=fontsize,
+                                  path_effects=[path_effects.withStroke(linewidth=1, foreground="black")], zorder=5))
         else:
-            at.append(ax.annotate(('%d'%var[ilat, ilon]), (lons[ilon] + shift_x, lats[ilat] + shift_y),
-                             color = 'white', weight='bold', fontsize=fontsize,
-                              path_effects=[path_effects.withStroke(linewidth=1, foreground="black")], zorder=5))
+            at.append(ax.annotate(('%d' % var[ilat, ilon]), (lons[ilon] + shift_x, lats[ilat] + shift_y),
+                                  color='white', weight='bold', fontsize=fontsize,
+                                  path_effects=[path_effects.withStroke(linewidth=1, foreground="black")], zorder=5))
 
     return at
+
+
+def compute_rate(dset):
+    '''Given an accumulated variable compute the step rate'''
+    try:
+        rain_acc = dset['RAIN_GSP'] + dset['RAIN_CON']
+    except:
+        rain_acc = dset['RAIN_GSP']
+    try:
+        snow_acc = dset['lssrwe'] + dset['csrwe']
+    except:
+        snow_acc = dset['lssrwe']
+
+    rain = rain_acc.differentiate(coord="step", datetime_unit="h")
+    snow = snow_acc.differentiate(coord="step", datetime_unit="h")
+
+    rain = xr.DataArray(rain, name='rain_rate')
+    snow = xr.DataArray(snow, name='snow_rate')
+
+    return xr.merge([dset, rain, snow])
