@@ -65,12 +65,15 @@ def plot_files(dss, **args):
         # Build the name of the output image
         filename = utils.subfolder_images[projection] + \
             '/' + variable_name + '_%s.png' % cum_hour
+            
+        cmap = plt.get_cmap('gist_stern_r')
+        new_cmap = utils.truncate_colormap(cmap, 0, 0.9)
 
         cs = args['ax'].tricontourf(args['x'],
                                     args['y'],
                                     data['prob_tmax_25'],
                                     extend='max',
-                                    cmap='plasma_r',
+                                    cmap=new_cmap,
                                     levels=args['levels'])
 
         an_fc = utils.annotation_forecast(args['ax'], time)

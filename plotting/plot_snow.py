@@ -35,6 +35,7 @@ def main():
     snow = xr.DataArray(snow, name='snow_rate')
 
     ds = ((snow > 0.25).sum(dim='number') / len(dset.number)) * 100
+    ds = ds.load()
 
     _ = plt.figure(figsize=(utils.figsize_x, utils.figsize_y))
 

@@ -29,7 +29,7 @@ apiURL_places = "https://api.mapbox.com/geocoding/v5/mapbox.places"
 if 'MODEL_DATA_FOLDER' in os.environ:
     folder = os.environ['MODEL_DATA_FOLDER']
 else:
-    folder = '/home/ekman/ssd/guido/icon-eu-eps'
+    folder = '/home/ekman/ssd/guido/icon-eu-eps/'
 
 folder_images = folder
 chunks_size = 10
@@ -147,11 +147,11 @@ def read_dataset(vars=['tmax_2m', 'vmax_10m'],
     for var in vars:
         dss.append(xr.open_mfdataset(f"{folder}/*{var}*.grib2"))
     dset = xr.merge(dss, compat='override')
+    dset = dset.rename({'values':'cell'})
     grid = xr.open_dataset(f"{folder}/icon_grid_0028_R02B07_N02.nc")
-    dset = dset.assign_coords(
-        {'values': grid.rename_dims({'cell': 'values'}).clat})
-    dset['clon'] = np.rad2deg(dset['clon'])
-    dset['clat'] = np.rad2deg(dset['clat'])
+    dset = xr.merge([dset, grid[['clon','clat']]])
+    dset['clon'] = dset['clon'].metpy.convert_units('degrees').metpy.dequantify()
+    dset['clat'] = dset['clat'].metpy.convert_units('degrees').metpy.dequantify()
     dset = dset.chunk({'number': 1})
     dset = dset.metpy.parse_cf()
 

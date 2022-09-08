@@ -1,109 +1,128 @@
+import time
+from tqdm.contrib.concurrent import process_map
+import sys
+from utils import get_city_coordinates, read_dataset, processes, folder_images
+import matplotlib.dates as mdates
+import seaborn as sns
 import numpy as np
 import matplotlib.pyplot as plt
-import pandas as pd
-from matplotlib.dates import  DateFormatter
-from reader import read_coordinates, read_variable, read_dates
-import seaborn as sns
-import matplotlib.dates as mdates
-from matplotlib.dates import  DateFormatter
-from geopy.geocoders import Nominatim
-import os
+from matplotlib import gridspec
+import matplotlib
+matplotlib.use('Agg')
 
-plt.switch_backend('agg')
 
-# Get coordinates 
-lats, lons = read_coordinates()
+print('Starting script to plot meteograms')
 
-# Get files list
-run=str(os.environ.get('run'))
-diri_images='/scratch/local1/m300382/icon_eu_eps/'
+# Get the projection as system argument from the call so that we can
+# span multiple instances of this script outside
+if not sys.argv[1:]:
+    print('City not defined, falling back to default (Hamburg)')
+    cities = ['Hamburg']
+else:
+    cities = sys.argv[1:]
 
-t2m = read_variable(variable='t_2m')
-time= read_dates()
-t2m = t2m-273.15
-u10m = read_variable(variable='u_10m')
-v10m = read_variable(variable='v_10m')
-wind_speed=np.sqrt(u10m**2+v10m**2)
-wind_speed=wind_speed*3.6
 
-tot_prec = read_variable(variable='tot_prec')
+def main():
+    ds = read_dataset(vars=['t_2m', 'tot_prec',
+                            'snow_gsp', 'snow_con', 'clct'])
+    ds['snow_rate'] = (ds['lssrwe'] + ds['csrwe']).differentiate(coord="step", datetime_unit="h")
+    # we use total prec for this
+    ds['rain_rate'] = ds['tp'].differentiate(coord="step", datetime_unit="h")
 
-cities = ["Hamburg"]
+    lons, lats = np.deg2rad(ds.clon), np.deg2rad(ds.clat)
 
-nrows=4
-ncols=1
-sns.set(style="white")
-run=''
+    it = []
+    for city in cities:
+        lon, lat = get_city_coordinates(city)
+        # Find closest point with haversine distance
+        dlon = np.deg2rad(lon) - lons
+        dlat = np.deg2rad(lat) - lats
+        a = np.sin(dlat/2.0)**2 + np.cos(lats) * \
+            np.cos(np.deg2rad(lat)) * np.sin(dlon/2.0)**2
+        c = 2 * np.arcsin(np.sqrt(a))
+        km = 6367 * c
+        sel = np.argmin(km.values)
+        d = ds.drop(['lssrwe', 'csrwe','tp']).isel(cell=sel).compute()
+        d.attrs['city'] = city
+        it.append(d)
 
-t_2m_point={}
-tot_prec_point={}
-wind_speed_10m_point={}
+    process_map(plot, it, max_workers=processes, chunksize=2)
 
-geolocator = Nominatim()
-for city in cities:
-    loc = geolocator.geocode(city)
-    distance = np.sqrt((lats-loc.latitude)**2+(lons-loc.longitude)**2)
-    ncell = np.argmin(distance)
-    t_2m_point[city] = t2m[:,:,ncell]
-    tot_prec_point[city] = tot_prec[:,:,ncell]
-    wind_speed_10m_point[city] = wind_speed[:,:,ncell]
-    
-    fig = plt.figure(1, figsize=(10,12))
-    
-    pos = np.array((time-time[0]) / pd.Timedelta('1 hour')).astype("int")
 
-    ax1=plt.subplot2grid((nrows,ncols), (0,0))
-    ax1.set_title("ICON-EPS meteogram for "+city+" | Run "+run)
-    
-    bplot=ax1.boxplot(t_2m_point[city].T, patch_artist=True, showfliers=False, positions=pos, widths=2)
-    for box in bplot['boxes']:
-        box.set(color='LightBlue')
-        box.set(facecolor='LightBlue')
+def plot(dset_city):
+    city = dset_city.attrs['city']
+    print('Producing meteogram for %s' % city)
+    dset_city['t2m'] = dset_city['t2m'].metpy.convert_units('degC')
 
-    ax1.plot(pos, np.mean(t_2m_point[city], axis=1), 'r-', linewidth=1)
-    ax1.set_ylabel("2m Temp. [C]",fontsize=8)
-    ax1.yaxis.grid(True)
-    ax1.xaxis.grid(True, color='gray', linewidth=0.2)
-    ax1.tick_params(axis='y', which='major', labelsize=8)
-    ax1.tick_params(axis='x', which='both', bottom=False)
+    nrows = 3
+    ncols = 1
+    sns.set(style="white")
 
-    ax2=plt.subplot2grid((nrows,ncols), (1,0))
-    bplot_rain=ax2.boxplot(tot_prec_point[city].T, patch_artist=True, showfliers=False, positions=pos, widths=2)
-    for box in bplot_rain['boxes']:
-        box.set(color='LightBlue')
-        box.set(facecolor='LightBlue')
-    ax2.plot(pos, np.mean(tot_prec_point[city], axis=1), 'r-', linewidth=1)
-    ax2.set_ylim(bottom=0)
-    ax2.yaxis.grid(True)
-    ax2.set_ylabel("Precipitation [mm]",fontsize=8)
-    ax2.tick_params(axis='y', which='major', labelsize=8)
-    ax2.xaxis.grid(True, color='gray', linewidth=0.2)
+    locator = mdates.AutoDateLocator(minticks=12, maxticks=36)
+    formatter = mdates.ConciseDateFormatter(locator, show_offset=False)
 
-    ax3=plt.subplot2grid((nrows,ncols), (2,0))
-    bplot_wind=ax3.boxplot(wind_speed_10m_point[city].T, patch_artist=True, showfliers=False, positions=pos, widths=2)
-    for box in bplot_wind['boxes']:
-        box.set(color='LightBlue')
-        box.set(facecolor='LightBlue')
-    ax3.plot(pos, np.mean(wind_speed_10m_point[city], axis=1),'r-', linewidth=1)
-    ax3.yaxis.grid(True)
-    ax3.set_ylabel("Wind speed [km/h]",fontsize=8)
-    ax3.tick_params(axis='y', which='major', labelsize=8)
-    ax3.set_ylim(bottom=0)
-    ax3.xaxis.grid(True, color='gray', linewidth=0.2)
-    
-    ax4=plt.subplot2grid((nrows,ncols), (3,0))
-    ax4.plot_date(time, t_2m_point[city], '-',linewidth=0.8)
-    ax4.set_xlim(time[0],time[-1])
-    ax4.set_ylabel("2m Temp. [C]",fontsize=8)
-    ax4.tick_params(axis='y', which='major', labelsize=8)
-    ax4.yaxis.grid(True)
-    ax4.xaxis.grid(True)
-    ax4.xaxis.set_major_locator(mdates.DayLocator())
-    ax4.xaxis.set_major_formatter(DateFormatter('%d/%m/%y %HZ'))
-    
-    ax4.annotate('Grid point %4.2fN %4.2fE' % (lats[ncell], lons[ncell]), 
-                 xy=(0.7, -0.7), xycoords='axes fraction', color="gray")
-    
-    fig.subplots_adjust(hspace=0.1)
-    fig.autofmt_xdate()
-    plt.savefig(diri_images+"meteogram_"+city, dpi=100, bbox_inches='tight')
+    fig = plt.figure(1, figsize=(9, 10))
+    gs = gridspec.GridSpec(nrows, ncols, height_ratios=[1, 1, 1])
+
+    ax_temp = plt.subplot(gs[0])
+    ax_temp.set_title("ICON-EU-EPS meteogram for "+city+" | Run " +
+                      dset_city.time.dt.strftime('%Y%m%d %H UTC').item())
+    ax_temp.plot(dset_city.valid_time,
+                 dset_city['t2m'].values.T, '-', linewidth=0.8, zorder=1)
+    ax_temp.set_xlim(dset_city.valid_time[0], dset_city.valid_time[-1])
+    ax_temp.xaxis.set_major_locator(locator)
+    ax_temp.xaxis.set_major_formatter(formatter)
+    ax_temp.yaxis.grid(True)
+    ax_temp.xaxis.grid(True, color='gray', linewidth=0.2)
+    ax_temp.tick_params(axis='y', which='major', labelsize=8)
+    ax_temp.tick_params(axis='x', which='both',
+                        bottom=False, labelbottom=False)
+    ax_temp.set_ylabel("2m temperature", fontsize=8)
+
+    ax_prec = plt.subplot(gs[1])
+    for member in range(1, len(dset_city.number)):
+        ax_prec.bar(dset_city.rain_rate.sel(number=member).valid_time,
+                    dset_city.rain_rate.sel(number=member).values, width=0.035,
+                    alpha=0.2, color='blue', zorder=1)
+        ax_prec.bar(dset_city.snow_rate.sel(number=member).valid_time,
+                    dset_city.snow_rate.sel(number=member).values, width=0.035,
+                    alpha=0.2, color='purple', zorder=2)
+    ax_prec.yaxis.grid(True)
+    ax_prec.xaxis.grid(True, color='gray', linewidth=0.2)
+    ax_prec.set_ylim(bottom=0)
+    ax_prec.set_xlim(dset_city.valid_time[0], dset_city.valid_time[-1])
+    ax_prec.xaxis.set_major_locator(locator)
+    ax_prec.xaxis.set_major_formatter(formatter)
+    ax_prec.tick_params(axis='y', which='major', labelsize=8)
+    ax_prec.tick_params(axis='x', which='both',
+                        bottom=False, labelbottom=False)
+    ax_prec.set_ylabel("Rain (blue) and snow (purple)", fontsize=8)
+
+    ax_clouds = plt.subplot(gs[2])
+    ax_clouds.plot(dset_city.valid_time,
+                   dset_city['CLCT'].values.T, 'o', zorder=1)
+    ax_clouds.plot(dset_city.valid_time, dset_city['CLCT'].mean(dim='number'), '-',
+                   linewidth=2, zorder=2, color='black')
+    ax_clouds.yaxis.grid(True)
+    ax_clouds.xaxis.grid(True, color='gray', linewidth=0.2)
+    ax_clouds.set_ylim(bottom=0)
+    ax_clouds.set_xlim(dset_city.valid_time[0], dset_city.valid_time[-1])
+    ax_clouds.xaxis.set_major_locator(locator)
+    ax_clouds.xaxis.set_major_formatter(formatter)
+    for label in ax_clouds.get_xticklabels(which='major'):
+        label.set(rotation=45)
+    ax_clouds.tick_params(axis='y', which='major', labelsize=8)
+    ax_clouds.tick_params(axis='x', which='both', bottom=False)
+    ax_clouds.set_ylabel("Cloud cover", fontsize=8)
+
+    fig.subplots_adjust(hspace=0.05)
+
+    plt.savefig(folder_images+"meteogram_"+city, dpi=100, bbox_inches='tight')
+    plt.clf()
+
+
+if __name__ == "__main__":
+    start_time = time.time()
+    main()
+    elapsed_time = time.time()-start_time
+    print("script took " + time.strftime("%H:%M:%S", time.gmtime(elapsed_time)))
