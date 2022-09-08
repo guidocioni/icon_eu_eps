@@ -5,7 +5,7 @@ from functools import partial
 import utils
 import sys
 
-debug = True
+debug = False
 if not debug:
     import matplotlib
     matplotlib.use('Agg')

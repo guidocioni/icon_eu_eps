@@ -36,7 +36,7 @@ def main():
         ds = ((dset['gust'] > threshold).sum(
             dim='number') / len(dset.number))*100
         ds.attrs['threshold'] = threshold
-        print(ds)
+        ds = ds.load()
 
         _ = plt.figure(figsize=(utils.figsize_x, utils.figsize_y))
 
