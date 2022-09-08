@@ -13,8 +13,8 @@ export HOME_FOLDER=$(pwd)
 export N_CONCUR_PROCESSES=12 # not used anymore as it needs to be tuned per case
 export NCFTP_BOOKMARK="mid"
 DATA_DOWNLOAD=true
-DATA_PLOTTING=false
-DATA_UPLOAD=false
+DATA_PLOTTING=true
+DATA_UPLOAD=true
 
 ##### LOAD functions to download model data
 . ./functions_download_dwd.sh
@@ -43,7 +43,8 @@ echo "Processing run ${latest_run}"
 
 ###########################################
 
-mkdir -p ${MODEL_DATA_FOLDER}
+mkdir -p ${MODEL_DATA_FOLDER}it
+mkdir -p ${MODEL_DATA_FOLDER}de
 
 # Move to the data folder to do processing
 cd ${MODEL_DATA_FOLDER} || { echo 'Cannot change to DATA folder' ; exit 1; }
@@ -86,9 +87,9 @@ if [ "$DATA_PLOTTING" = true ]; then
 
 	# python plot_meteogram.py
 
-	scripts=("plot_max_gust.py" "plot_tot_prec.py" "plot_snow.py")
+	scripts=("plot_max_gust.py" "plot_tot_prec.py" "plot_snow.py" "plot_clouds.py" "plot_tmax.py")
 
-	projections=("euratl")
+	projections=("euratl" "it" "de")
 
 	parallel -j 1 python ::: "${scripts[@]}" ::: "${projections[@]}"
 	rm ${MODEL_DATA_FOLDER}*.py
@@ -120,12 +121,12 @@ if [ "$DATA_UPLOAD" = true ]; then
 	#
 	# Then upload the other pictures
 	#
-	images_output=("prob_prec_50" "prob_winds_50" "prob_snow")
+	images_output=("prob_prec_50" "prob_winds_50" "prob_snow" "prob_clouds" "prob_tmax")
 
 	# suffix for naming
-	projections_output=("")
+	projections_output=("" "it/" "de/")
 	# remote folder on server
-	projections_output_folder=("icon_eu_eps")
+	projections_output_folder=("icon_eu_eps" "icon_eu_eps/it" "icon_eu_eps/de")
 
 	# Create a lisf of all the images to upload 
 	upload_elements=()
