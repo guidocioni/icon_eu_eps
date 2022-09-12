@@ -145,15 +145,15 @@ def read_dataset(vars=['tmax_2m', 'vmax_10m'],
     """Wrapper to initialize the dataset"""
     dss = []
     for var in vars:
-        dss.append(xr.open_mfdataset(f"{folder}/*{var}*.grib2"))
+        dss.append(xr.open_mfdataset(f"{folder}/*{var}*.grib2",
+                                     chunks={'number': 1},
+                                     backend_kwargs={'errors': 'ignore'}))
     dset = xr.merge(dss, compat='override')
     dset = dset.rename({'values':'cell'})
     grid = xr.open_dataset(f"{folder}/icon_grid_0028_R02B07_N02.nc")
     dset = xr.merge([dset, grid[['clon','clat']]])
     dset['clon'] = dset['clon'].metpy.convert_units('degrees').metpy.dequantify()
     dset['clat'] = dset['clat'].metpy.convert_units('degrees').metpy.dequantify()
-    dset = dset.chunk({'number': 1})
-    dset = dset.metpy.parse_cf()
 
     if region:
         proj = proj_defs[region]

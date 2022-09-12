@@ -66,7 +66,7 @@ if [ "$DATA_DOWNLOAD" = true ]; then
 	#2-D variables
 	# note that for some reason snow_gsp and snow_con only have all timesteps for 00 and 12 runs
 	# so for all other runs less timesteps will be present in the output    
-	variables=("t_2m" "clct" "snow_gsp" "snow_con" "tot_prec" "vmax_10m")
+	variables=("t_2m" "clct" "snow_gsp" "snow_con" "tot_prec" "vmax_10m" "u_10m" "v_10m")
 	parallel -j 2 --delay 1 download_merge_2d_variable_icon_eu_eps ::: "${variables[@]}"
 
 	download_merge_3d_variable_icon_eu_eps t

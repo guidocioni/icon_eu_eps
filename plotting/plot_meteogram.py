@@ -64,7 +64,7 @@ def plot(dset_city):
     locator = mdates.AutoDateLocator(minticks=12, maxticks=36)
     formatter = mdates.ConciseDateFormatter(locator,
                                             show_offset=False,
-                                            formats=['%y', '%b', '%d %b', '%H EST', '%H EST', '%S'])
+                                            formats=['%y', '%a %d %b', '%a %d %b', '%H EST', '%H EST', '%S'])
 
     fig = plt.figure(1, figsize=(9, 10))
     gs = gridspec.GridSpec(nrows, ncols, height_ratios=[1, 1, 1])
@@ -123,7 +123,7 @@ def plot(dset_city):
 
     ax_clouds = plt.subplot(gs[2])
     ax_clouds.plot(dset_city['valid_time'],
-                   dset_city['CLCT'].values.T, 'o', zorder=1)
+                   dset_city['CLCT'].values.T, 'o', zorder=1, markersize=5)
     ax_clouds.plot(dset_city['valid_time'], dset_city['CLCT'].mean(dim='number'), '-',
                    linewidth=2, zorder=2, color='black')
     ax_clouds.yaxis.grid(True)
@@ -133,10 +133,14 @@ def plot(dset_city):
     ax_clouds.xaxis.set_major_locator(locator)
     ax_clouds.xaxis.set_major_formatter(formatter)
     for label in ax_clouds.get_xticklabels(which='major'):
-        label.set(rotation=45)
+        label.set(rotation=90)
     ax_clouds.tick_params(axis='y', which='major', labelsize=8)
     ax_clouds.tick_params(axis='x', which='both', labelsize=8)
     ax_clouds.set_ylabel("Cloud cover", fontsize=8)
+
+    ax_clouds.annotate('Grid point %3.1fN %3.1fE' % (dset_city.clat, dset_city.clon),
+                       xy=(0.7, -0.4), xycoords='axes fraction', color="gray")
+
 
     fig.subplots_adjust(hspace=0.05)
 
