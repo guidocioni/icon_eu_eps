@@ -25,7 +25,7 @@ if not sys.argv[1:]:
 else:
     projection = sys.argv[1]
 
-thresholds = [50]
+thresholds = [50, 100]
 
 
 def main():

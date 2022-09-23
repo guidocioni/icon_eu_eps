@@ -121,7 +121,7 @@ if [ "$DATA_UPLOAD" = true ]; then
 	#
 	# Then upload the other pictures
 	#
-	images_output=("prob_prec_50" "prob_winds_50" "prob_snow" "prob_clouds" "prob_tmax")
+	images_output=("prob_prec_50" "prob_prec_100" "prob_winds_50" "prob_snow" "prob_clouds" "prob_tmax")
 
 	# suffix for naming
 	projections_output=("" "it/" "de/")

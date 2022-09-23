@@ -85,12 +85,13 @@ def plot(dset_city):
     ax_temp.set_ylabel("2m temperature", fontsize=8)
 
     ax_prec = plt.subplot(gs[1])
+    widths = np.concatenate([np.full(49, 0.035), np.full(8,0.1), np.full(8, 0.2)])
     for member in range(1, len(dset_city.number)):
         ax_prec.bar(dset_city['valid_time'],
-                    dset_city.rain_rate.sel(number=member).values, width=0.035,
+                    dset_city.rain_rate.sel(number=member).values, width=widths,
                     alpha=0.2, color='blue', zorder=1)
         ax_prec.bar(dset_city['valid_time'],
-                    dset_city.snow_rate.sel(number=member).values, width=0.035,
+                    dset_city.snow_rate.sel(number=member).values, width=widths,
                     alpha=0.2, color='purple', zorder=2)
 
     # Add text on top of the bars
