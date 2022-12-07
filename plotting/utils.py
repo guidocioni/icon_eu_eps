@@ -150,7 +150,7 @@ def read_dataset(vars=['tmax_2m', 'vmax_10m'],
                                      backend_kwargs={'errors': 'ignore'}))
     dset = xr.merge(dss, compat='override')
     dset = dset.rename({'values':'cell'})
-    grid = xr.open_dataset(f"{folder}/icon_grid_0028_R02B07_N02.nc")
+    grid = xr.open_dataset(f"{folder}/icon_grid_0037_R03B07_N02.nc")
     dset = xr.merge([dset, grid[['clon','clat']]])
     dset['clon'] = dset['clon'].metpy.convert_units('degrees').metpy.dequantify()
     dset['clat'] = dset['clat'].metpy.convert_units('degrees').metpy.dequantify()
@@ -282,7 +282,7 @@ def annotation_run(ax, time, loc='upper right', fontsize=8):
     """Put annotation of the run obtaining it from the
     time array passed to the function."""
     time = pd.to_datetime(time)
-    at = AnchoredText('Run %s' % time.strftime('%Y%m%d %H UTC'),
+    at = AnchoredText('ICON-EU-EPS Run %s' % time.strftime('%Y%m%d %H UTC'),
                       prop=dict(size=fontsize), frameon=True, loc=loc)
     at.patch.set_boxstyle("round,pad=0.,rounding_size=0.1")
     at.zorder = 10

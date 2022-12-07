@@ -48,7 +48,7 @@ export -f download_merge_3d_variable_icon_eu_eps
 download_invariant_icon_eu_eps()
 {
 	# download grid
-	filename="icon_grid_0028_R02B07_N02.nc"
+	filename="icon_grid_0037_R03B07_N02.nc"
 	wget -r -nH -np -nv -nd --reject "index.html*" --cut-dirs=3 -A "${filename}.bz2" "https://opendata.dwd.de/weather/lib/cdo/"
 	bzip2 -d ${filename}.bz2
 	# download hsurf
