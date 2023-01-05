@@ -4,7 +4,6 @@ from multiprocessing import Pool
 from functools import partial
 import utils
 import sys
-import xarray as xr
 
 debug = False
 if not debug:
@@ -101,25 +100,11 @@ def plot_files(dss, **args):
         an_run = utils.annotation_run(args['ax'], run)
 
         if first:
-            if projection == "euratl":
-                x_cbar_0, y_cbar_0, x_cbar_size, y_cbar_size = 0.15, 0.15, 0.35, 0.02
-                x_cbar2_0, y_cbar2_0, x_cbar2_size, y_cbar2_size = 0.55, 0.15, 0.35, 0.02
-            elif projection == "de":
-                x_cbar_0, y_cbar_0, x_cbar_size, y_cbar_size = 0.17, 0.05, 0.32, 0.02
-                x_cbar2_0, y_cbar2_0, x_cbar2_size, y_cbar2_size = 0.55, 0.05, 0.32, 0.02
-            elif projection == "it":
-                x_cbar_0, y_cbar_0, x_cbar_size, y_cbar_size = 0.18, 0.05, 0.3, 0.02
-                x_cbar2_0, y_cbar2_0, x_cbar2_size, y_cbar2_size = 0.55, 0.05, 0.3, 0.02
-            ax_cbar = plt.gcf().add_axes(
-                [x_cbar_0, y_cbar_0, x_cbar_size, y_cbar_size])
-            ax_cbar_2 = plt.gcf().add_axes(
-                [x_cbar2_0, y_cbar2_0, x_cbar2_size, y_cbar2_size])
+            ax_cbar, ax_cbar_2 = utils.divide_axis_for_cbar(args['ax'])
             cbar_snow = plt.gcf().colorbar(css, cax=ax_cbar, orientation='horizontal',
                                            label='Snow [cm/hr]')
             cbar_rain = plt.gcf().colorbar(cs, cax=ax_cbar_2, orientation='horizontal',
                                            label='Rain [mm/hr]')
-            cbar_snow.ax.tick_params(labelsize=8)
-            cbar_rain.ax.tick_params(labelsize=8)
 
         if debug:
             plt.show(block=True)
